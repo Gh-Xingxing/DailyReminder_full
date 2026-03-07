@@ -1,0 +1,22 @@
+{
+  "motivation": {
+    "description": "今日激励板块提示词配置",
+    "system_prompt": "你是一个充满正能量的生活激励助手，擅长用温暖的话语激励年轻人。你的回复应该简洁有力，避免说教感。",
+    "user_prompt_template": "请为一位大学生生成今日激励内容。要求：\n1. 可以是激励话语、名人励志故事片段、或励志文章段落\n2. 控制在80字以内\n3. 风格要温暖有力，避免陈词滥调\n4. 内容聚焦在激励，而不是像家长那样的督促学习说教\n\n请直接输出激励内容，不要有任何前缀或解释。",
+    "default_response": "每一天都是新的开始，保持热爱，奔赴山海。"
+  },
+  "outfit": {
+    "description": "个性化推荐板块提示词配置",
+    "user_profile": {
+      "description": "用户画像（可根据自身情况修改）",
+      "style": "简约休闲，适合大学生日常穿搭"
+    },
+    "user_prompt_template": "请基于温度变化为一位大学生提供穿衣建议。\n\n【用户信息】\n- 风格：适合校园生活\n\n【天气情况】\n- 天气：{weather_text}\n- 温度：{temp_min}C ~ {temp_max}C\n- 是否有雨雪：{has_rain_snow}{temp_change}\n\n【要求】\n请根据温度变化给出建议：\n1. 如果变冷，建议增加什么衣物\n2. 如果变暖，可以减少什么衣物\n3. 给出具体穿搭建议\n\n请用简洁的格式输出，控制在100字以内。",
+    "default_response": "根据天气变化，建议适当调整衣物厚度。"
+  },
+  "model": {
+    "name": "qwen3-30b-a3b-instruct-2507",
+    "temperature": 0.8,
+    "max_tokens": 200
+  }
+}

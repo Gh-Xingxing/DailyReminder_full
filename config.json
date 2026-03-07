@@ -1,0 +1,21 @@
+{
+  "user": {
+    "name": "",
+    "location": "101110101",
+    "location_name": "请修改为你的城市"
+  },
+  "semester": {
+    "start_date": "2026-03-02",
+    "total_weeks": 16,
+    "current_week": 1
+  },
+  "reminder": {
+    "skip_weekend": true,
+    "items": []
+  },
+  "llm": {
+    "enabled": true,
+    "model": "qwen3-30b-a3b-instruct-2507"
+  },
+  "courses": []
+}
