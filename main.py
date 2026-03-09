@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-主程序 - 早晨提醒Agent（完整版）
+主程序 - 早晨提醒Agent
 功能：
 1. 读取配置
 2. 获取明日天气
@@ -199,9 +199,13 @@ def get_tomorrow_weather(config):
         logger.error(f"获取天气信息失败: {e}")
         return None
 
-
 def get_tomorrow_courses(config, current_week):
-    """获取明日课程（支持周次和单双周筛选）"""
+    """获取明日课程（支持周次和单双周筛选）
+    
+    注意：current_week 是今天所在的周次，
+    如果今天是周日晚上，明天是下一周的周一，
+    所以明天的课程应该用下一周的周次来筛选。
+    """
     try:
         courses = config.get('courses', [])
         if not courses:
@@ -219,6 +223,13 @@ def get_tomorrow_courses(config, current_week):
         
         logger.info(f"北京时间今天星期{beijing_now.weekday() + 1}，明天星期{tomorrow_weekday}")
         
+        # 计算明天的周次
+        # 如果今天是周日，明天是周一，周次要+1
+        tomorrow_week = current_week
+        if current_week is not None and beijing_now.weekday() == 6:
+            tomorrow_week = current_week + 1
+            logger.info(f"今天是周日，明天是第二周周一，使用周次: {tomorrow_week}")
+        
         # 筛选明天的课程
         tomorrow_courses = []
         for course in courses:
@@ -226,19 +237,19 @@ def get_tomorrow_courses(config, current_week):
                 continue
             
             # 如果有周次信息，进行周次筛选
-            if current_week is not None:
+            if tomorrow_week is not None:
                 start_week = course.get('start_week', 1)
                 end_week = course.get('end_week', 16)
                 week_type = course.get('week_type', 'all')
                 
                 # 检查是否在周次范围内
-                if not (start_week <= current_week <= end_week):
+                if not (start_week <= tomorrow_week <= end_week):
                     continue
                 
                 # 检查单双周
-                if week_type == 'odd' and current_week % 2 == 0:
+                if week_type == 'odd' and tomorrow_week % 2 == 0:
                     continue
-                if week_type == 'even' and current_week % 2 == 1:
+                if week_type == 'even' and tomorrow_week % 2 == 1:
                     continue
             
             tomorrow_courses.append(course)
@@ -255,7 +266,6 @@ def get_tomorrow_courses(config, current_week):
     except Exception as e:
         logger.error(f"获取课程信息失败: {e}")
         return [], []
-
 
 def call_llm(prompt, system_prompt=None, temperature=0.8, max_tokens=200):
     """调用阿里云百炼LLM"""
@@ -325,13 +335,13 @@ def generate_outfit_advice(weather_info, llm_config):
         temp_diff = tomorrow_avg - today_avg
         
         if temp_diff >= 5:
-            temp_change_info = f"\n- 温度变化：明天比今天暖和约{temp_diff:.0f}C，可以适当减少衣物"
+            temp_change_info = f"\n- 温度变化：明天比今天暖和约{temp_diff:.0f}℃，可以适当减少衣物"
         elif temp_diff <= -5:
-            temp_change_info = f"\n- 温度变化：明天比今天冷约{abs(temp_diff):.0f}C，需要增加保暖衣物"
+            temp_change_info = f"\n- 温度变化：明天比今天冷约{abs(temp_diff):.0f}℃，需要增加保暖衣物"
         elif temp_diff >= 2:
-            temp_change_info = f"\n- 温度变化：明天比今天稍暖{temp_diff:.0f}C"
+            temp_change_info = f"\n- 温度变化：明天比今天稍暖{temp_diff:.0f}℃"
         elif temp_diff <= -2:
-            temp_change_info = f"\n- 温度变化：明天比今天稍冷{abs(temp_diff):.0f}C，注意保暖"
+            temp_change_info = f"\n- 温度变化：明天比今天稍冷{abs(temp_diff):.0f}℃，注意保暖"
         else:
             temp_change_info = f"\n- 温度变化：明天温度与今天相近"
     
@@ -346,27 +356,30 @@ def generate_outfit_advice(weather_info, llm_config):
         )
         default_response = outfit_config.get('default_response', DEFAULT_OUTFIT_ADVICE)
     else:
-        user_prompt = f"""请为一位大学生提供穿搭建议。
+        user_prompt = f"""请为一位20岁男大学生提供穿搭建议。
+
+【用户信息】
+- 身高：178cm，身材匀称，有健身习惯
+- 风格：简约休闲
 
 【天气情况】
 - 天气：{weather_info['text_day']}
-- 温度：{weather_info['temp_min']}C ~ {weather_info['temp_max']}C
+- 温度：{weather_info['temp_min']}℃ ~ {weather_info['temp_max']}℃
 - 是否有雨雪：{'是' if weather_info['has_rain_snow'] else '否'}{temp_change_info}
 
 【要求】
-请给出详细的穿搭建议，控制在100字以内。"""
+请给出详细的穿搭建议，包括内搭、外套、裤子类型和颜色、领子类型、鞋子建议。控制在100字以内。"""
         default_response = DEFAULT_OUTFIT_ADVICE
     
     response = call_llm(user_prompt, temperature=0.8, max_tokens=200)
     return response.strip() if response else default_response
-
 
 def assemble_message(config, weather_info, morning_courses, afternoon_courses, motivation, outfit_advice, current_week):
     """组装消息"""
     try:
         # 标题
         course_count = len(morning_courses) + len(afternoon_courses)
-        weather_summary = f"{weather_info['temp_min']}C~{weather_info['temp_max']}C" if weather_info else "未知"
+        weather_summary = f"{weather_info['temp_min']}℃~{weather_info['temp_max']}℃" if weather_info else "未知"
         week_info = f"第{current_week}周" if current_week else ""
         title = f"{week_info} | {weather_summary} | {course_count}节课"
         
@@ -374,14 +387,14 @@ def assemble_message(config, weather_info, morning_courses, afternoon_courses, m
         lines = []
         
         # 课程部分
-        lines.append("## 明日课程")
+        lines.append("## 📚 明日课程")
         
         if morning_courses:
             lines.append("**上午**：")
             for course in morning_courses:
                 teacher = course.get('teacher', '')
-                teacher_info = f" {teacher}" if teacher else ""
-                lines.append(f"- {course['course_name']}（第{course['start_section']}-{course['end_section']}节）{course['location']}{teacher_info}")
+                teacher_info = f" 👨‍🏫{teacher}" if teacher else ""
+                lines.append(f"- {course['course_name']}（第{course['start_section']}-{course['end_section']}节）📍{course['location']}{teacher_info}")
         else:
             lines.append("**上午**：无课程")
         
@@ -391,20 +404,20 @@ def assemble_message(config, weather_info, morning_courses, afternoon_courses, m
             lines.append("**下午**：")
             for course in afternoon_courses:
                 teacher = course.get('teacher', '')
-                teacher_info = f" {teacher}" if teacher else ""
-                lines.append(f"- {course['course_name']}（第{course['start_section']}-{course['end_section']}节）{course['location']}{teacher_info}")
+                teacher_info = f" 👨‍🏫{teacher}" if teacher else ""
+                lines.append(f"- {course['course_name']}（第{course['start_section']}-{course['end_section']}节）📍{course['location']}{teacher_info}")
         else:
             lines.append("**下午**：无课程")
         
         lines.append("")  # 空行
         
         # 天气部分
-        lines.append("## 明日天气")
+        lines.append("## 🌤️ 明日天气")
         if weather_info:
-            lines.append(f"- 温度：{weather_info['temp_min']}C ~ {weather_info['temp_max']}C")
-            lines.append(f"- 早7:30：{weather_info['temp_730']:.0f}C")
-            lines.append(f"- 上午平均：{weather_info['temp_am_avg']:.0f}C")
-            lines.append(f"- 下午平均：{weather_info['temp_pm_avg']:.0f}C")
+            lines.append(f"- 温度：{weather_info['temp_min']}℃ ~ {weather_info['temp_max']}℃")
+            lines.append(f"- 早7:30：{weather_info['temp_730']:.0f}℃")
+            lines.append(f"- 上午平均：{weather_info['temp_am_avg']:.0f}℃")
+            lines.append(f"- 下午平均：{weather_info['temp_pm_avg']:.0f}℃")
             
             weather_desc = f"{weather_info['text_day']}"
             if weather_info['has_rain_snow']:
@@ -417,22 +430,22 @@ def assemble_message(config, weather_info, morning_courses, afternoon_courses, m
         
         lines.append("")  # 空行
         
-        # 每日提醒部分（从配置读取）
-        reminder_config = config.get('reminder', {})
-        reminder_items = reminder_config.get('items', [])
-        if reminder_items:
-            lines.append("## 每日提醒")
-            for item in reminder_items:
-                lines.append(f"- {item}")
-            lines.append("")  # 空行
+        # 提醒部分
+        lines.append("## 💪 每日提醒")
+        if config.get('reminder', {}).get('daily_reading_reminder', False):
+            lines.append("- 📖 每日至少一小时阅读精进")
+        if config.get('reminder', {}).get('project_idea_reminder', False):
+            lines.append("- 💡 打磨细化赚钱/个人项目的想法")
+        
+        lines.append("")  # 空行
         
         # 激励和穿搭建议
-        lines.append("## 今日激励")
+        lines.append("## 🌟 今日激励")
         lines.append(motivation)
         
         lines.append("")  # 空行
         
-        lines.append("## 个性化推荐")
+        lines.append("## ✉️ 个性化推荐")
         lines.append(outfit_advice)
         
         return title, '\n'.join(lines)
